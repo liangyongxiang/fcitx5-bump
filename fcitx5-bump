@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+GENTOO_GIT_REPO="${GENTOO_GIT_REPO:-/home/yongxiang/work/gentoo/gentoo/}"
+
+main() {
+    # 1. check repo exist
+    if [ ! -d "$GENTOO_GIT_REPO" ]; then
+        echo "GENTOO_GIT_REPO is not directory: $GENTOO_GIT_REPO"
+        exit 1
+    fi
+    if ! git -C "$GENTOO_GIT_REPO" rev-parse &> /dev/null; then
+        echo "GENTOO_GIT_REPO is not git repository: $GENTOO_GIT_REPO"
+        exit 1
+    fi
+
+    # 2. get the list of pakcages to bump with nvchecker
+    # TODO: fixed tomlq keep order
+    #readarray -t packages < <(tomlq keys overlay.toml | jq -c '.[]' | sed 's/"//g')
+    local -a packages=(
+        x11-libs/xcb-imdkit
+        app-i18n/fcitx
+        app-i18n/fcitx-gtk
+        app-i18n/fcitx-qt
+        app-i18n/fcitx-configtool
+        app-i18n/fcitx-lua
+        app-i18n/libime
+        app-i18n/fcitx-chinese-addons
+        app-i18n/fcitx-table-extra
+        app-i18n/fcitx-table-other
+    )
+    local testing_keyword
+    testing_keyword="~$(portageq envvar ARCH)"
+
+    if ! find old_ver.json -mmin +120 &>/dev/null; then
+        {
+            local atom
+            local pv
+
+            echo "{"
+            for pn in "${packages[@]}"; do
+                atom="$(ACCEPT_KEYWORDS="$testing_keyword" portageq best_visible / "$pn")"
+                pv="$(qatom -F "%{PV}" "$atom")"
+                echo -n "  \"$pn\" : \"$pv\""
+                if [ "$pn" != "${packages[-1]}" ]; then
+                    echo ","
+                else
+                    echo ""
+                fi
+            done
+            echo "}"
+        } > old_ver.json
+    fi
+
+    if ! find new_ver.json -mmin +120 &>/dev/null; then
+        echo "Running nvchecker"
+        nvchecker --file fcitx.toml --keyfile keyfile.toml
+    fi
+
+    local pn
+    while read -r line; do
+        read -r cpn old_ver __ new_ver <<< "$line"
+        pn="$(qatom -F "%{PN}" "$cpn")"
+        pushd "${GENTOO_GIT_REPO}/${cpn}"
+        echo "pkgbump ${pn}-${old_ver}.ebuild ${pn}-${new_ver}.ebuild"
+        popd
+    done <<< "$(nvcmp --file fcitx.toml --newer)"
+
+    # 3. git prepare
+    # 4. bump
+    # 5. post echo: patch
+}
+
+main "$@"
