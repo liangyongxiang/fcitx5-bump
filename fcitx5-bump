@@ -58,6 +58,18 @@ main() {
         nvchecker --file fcitx.toml --keyfile keyfile.toml
     fi
 
+    local all_new_ver
+    all_new_ver="$(nvcmp --file fcitx.toml --newer)"
+    if [ -z "$all_new_ver" ]; then
+        echo "Nothing to do"
+        exit 0
+    fi
+
+    # 3. git prepare
+    git -C "$GENTOO_GIT_REPO" fetch origin
+    git -C "$GENTOO_GIT_REPO" checkout -B "fcitx5-$(date +%Y%m%d)" origin/master
+
+    # 4. bump
     local pn
     while read -r line; do
         read -r cpn old_ver __ new_ver <<< "$line"
@@ -67,8 +79,6 @@ main() {
         popd
     done <<< "$(nvcmp --file fcitx.toml --newer)"
 
-    # 3. git prepare
-    # 4. bump
     # 5. post echo: patch
 }
 
