@@ -75,7 +75,8 @@ main() {
         read -r cpn old_ver __ new_ver <<< "$line"
         pn="$(qatom -F "%{PN}" "$cpn")"
         pushd "${GENTOO_GIT_REPO}/${cpn}"
-        echo "pkgbump ${pn}-${old_ver}.ebuild ${pn}-${new_ver}.ebuild"
+        pkgbump ${pn}-${old_ver}.ebuild ${pn}-${new_ver}.ebuild
+        pkgdev commit
         popd
     done <<< "$(nvcmp --file fcitx.toml --newer)"
 
